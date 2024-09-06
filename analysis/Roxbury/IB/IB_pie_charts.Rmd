@@ -1,0 +1,108 @@
+# Roxbury Pie Chart Creation (for Mod-PM)
+
+## STOP
+
+**HAVE YOU RUN `IB_modpm_cleaning`?**
+*This file loads a dataframe created from running `IB_modpm_cleaning`. Make sure you run that file first (if you haven't already) before running this file.*
+
+This script is used to create pie charts the amount of time chosen for "safe" levels of concentration for multiple participants in the Roxbury pilot, for Mod-PM deployments by Olin.
+
+Results can be found in `summary/Roxbury/IB/s_IB_M_quants.csv`.
+
+## Set up
+Load libraries, define file paths, include participant IDs to be processed
+```{r}
+# Import relevant libraries
+library(tidyverse)
+library(data.table)
+```
+
+Set working directory
+NOTE: The working directory is dependent by user. 
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "~/AirPartners/hepa-public")
+```
+
+```{r}
+# Get file path
+if (!endsWith(getwd(), "hepa-public")) {
+  stop("Incorrect working directory")
+}
+```
+
+```{r}
+# Set path to data
+path_to_data <- "cleaning/Roxbury/IB/"
+```
+
+## Load data
+```{r}
+# Load Mod-PM data from RData file
+load(paste0(path_to_data, "cleaned_modpm.RData"))
+```
+
+## Set Thresholds
+```{r}
+proportion_df <- main_df  %>% 
+    mutate(across(case, ~factor(., levels=c("before","after")))) %>%
+    group_by(case) %>%
+    # Categorize as low, medium, high
+    mutate(danger_pm25 = case_when(
+      between(pm25, 0, 9) ~ 'LOW',
+      between(pm25, 9, 15) ~ 'MEDIUM',
+      pm25 > 15 ~ 'HIGH')) %>%
+    # Calculate proportions
+    count(danger_pm25) %>%
+    mutate(prop = 24 * n / sum(n)) %>% 
+    mutate(across(danger_pm25, ~factor(., levels=c("LOW","MEDIUM", "HIGH"))))
+```
+
+## Plotting
+```{r}
+my_caption <- expression(PM[2.5] ~levels ~categorized ~by ~EPA ~standards)
+
+ggplot(proportion_df, aes(x="", y=prop, fill=danger_pm25)) +
+  geom_bar(stat="identity", width=1) +
+  scale_fill_manual(values = c("#009E73", "#F0E442", "#D55E00")) +
+  facet_grid(cols = vars(case),
+             labeller = as_labeller(c("before" = "No Purifier", 
+                                      "after" = "With Purifier"))) +
+  labs(fill = "Pollutant Levels") + 
+  theme_minimal() +
+  theme(axis.text.x=element_blank(), axis.title.x = element_blank()) +
+  labs(title = "Impact of Using Air Purifiers",
+       subtitle = "Average time spent per day without and with purifier",
+       caption = my_caption)  + 
+  geom_text(aes(label = paste(round(prop), "hrs")),
+            position = position_stack(vjust = 0.5), size = 3)-> plot_base
+  
+```
+
+```{r}
+ plot_base + xlab("") + coord_polar("y", start=0)
+```
+```{r}
+plot_base + ylab("Percentage of Indoor Air")
+```
+Below transforms the code so that the x values of the bar chart are the
+pollutant levels and the y values are percentages, with two bars dodged for each
+category representing before and after.
+
+```{r}
+res_df <- dcast(proportion_df, danger_pm25 ~ case)
+
+res_df %>%
+  pivot_longer(-danger_pm25, names_to = "variable", values_to = "res") %>%
+  ggplot(aes(x = danger_pm25, y = res, fill = factor(variable, levels = c("before", "after")))) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.5) + 
+  xlab("Pollutant Level") +
+  ylab("Time (Hours)") +
+  scale_x_discrete(labels = c("CLEAN AIR", "LOW", "MEDIUM", "HIGH")) +
+  scale_fill_discrete(name="", labels = c("no purifier", "with purifier")) +
+  theme_minimal() +
+  labs(title = "Impact of Using Air Purifiers",
+       subtitle = "Average time spent per day without and with purifier")
+```
+
+
+

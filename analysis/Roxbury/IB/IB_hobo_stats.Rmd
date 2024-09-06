@@ -1,0 +1,61 @@
+# Summarize HOBO Data
+
+## STOP
+
+**HAVE YOU RUN `IB_hobo_cleaning`?**
+*This file loads a dataframe created from running `IB_hobo_cleaning`. Make sure you run that file first (if you haven't already) before running this file.*
+
+This file is used to summarize proportion of time HEPA air purifiers are switched on using HOBO data.
+
+## Set up
+Load libraries, define file paths, include participant IDs to be processed
+```{r}
+# Import relevant libraries
+library(tidyverse)
+```
+Set working directory
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "~/hepa-public")
+```
+
+Check for working directory
+```{r}
+# Check file path
+if (!endsWith(getwd(), "hepa-public")) {
+  stop("Incorrect working directory")
+}
+```
+
+Paths
+```{r}
+# Set path to data
+path_to_data <- "cleaning/Roxbury/IB/"
+```
+
+
+## Load data
+```{r}
+# Load HOBO data from RData file; loads as main_df
+load(paste0(path_to_data, "cleaned_hobo.RData"))
+```
+
+## Find means
+```{r}
+participant_prop <- main_df %>%
+  filter(case == "after") %>%
+  group_by(participant_id, room) %>%
+  summarise(prop_on = sum(power > 10)/n())
+
+overall_prop <- main_df %>%
+  filter(case == "after") %>%
+  summarise(prop_on = sum(power > 10)/n()) %>%
+  mutate(participant_id = "all", room = NA)
+
+props_df <- rbind(participant_prop, overall_prop)
+```
+## Save to file
+Summary statistics are saved in a CSV file.
+```{r}
+# Save summary statistic files to CSVs
+write.csv(props_df, "summary/Roxbury/IB/s_IB_H_props.csv")
+```
